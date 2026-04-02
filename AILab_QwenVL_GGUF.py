@@ -76,6 +76,7 @@ class GGUFVLResolved:
     mmproj_filename: str | None
     context_length: int
     image_max_tokens: int
+    image_min_tokens: int
     n_batch: int
     gpu_layers: int
     top_k: int
@@ -301,6 +302,7 @@ def _resolve_model_entry(model_name: str) -> GGUFVLResolved:
         mmproj_filename=str(mmproj_filename) if mmproj_filename else None,
         context_length=_int("context_length", 8192),
         image_max_tokens=_int("image_max_tokens", 4096),
+        image_min_tokens=_int("image_min_tokens", 1024),
         n_batch=_int("n_batch", 512),
         gpu_layers=_int("gpu_layers", -1),
         top_k=_int("top_k", 0),
@@ -338,6 +340,7 @@ class QwenVLGGUFBase:
         n_batch: int | None,
         gpu_layers: int | None,
         image_max_tokens: int | None,
+        image_min_tokens: int | None,
         top_k: int | None,
         pool_size: int | None,
     ):
@@ -381,6 +384,7 @@ class QwenVLGGUFBase:
             n_gpu_layers = 0
 
         img_max = int(image_max_tokens) if image_max_tokens is not None else resolved.image_max_tokens
+        img_min = int(image_min_tokens) if image_min_tokens is not None else resolved.image_min_tokens
 
         has_mmproj = mmproj_path is not None and mmproj_path.exists()
 
@@ -391,6 +395,7 @@ class QwenVLGGUFBase:
             n_batch_val,
             n_gpu_layers,
             img_max,
+            img_min,
             top_k_val,
             pool_size_val,
         )
@@ -444,7 +449,7 @@ class QwenVLGGUFBase:
         }
         if has_mmproj and self.chat_handler is not None:
             llm_kwargs["chat_handler"] = self.chat_handler
-            llm_kwargs["image_min_tokens"] = 1024
+            llm_kwargs["image_min_tokens"] = img_min
             llm_kwargs["image_max_tokens"] = img_max
 
         print(f"[QwenVL] Loading GGUF: {model_path.name} (device={device_kind}, gpu_layers={n_gpu_layers}, ctx={n_ctx})")
@@ -534,6 +539,7 @@ class QwenVLGGUFBase:
         n_batch: int | None,
         gpu_layers: int | None,
         image_max_tokens: int | None,
+        image_min_tokens: int | None,
         top_k: int | None,
         pool_size: int | None,
         enable_thinking: bool = False,
@@ -566,6 +572,7 @@ class QwenVLGGUFBase:
                 n_batch=n_batch,
                 gpu_layers=gpu_layers,
                 image_max_tokens=image_max_tokens,
+                image_min_tokens=image_min_tokens,
                 top_k=top_k,
                 pool_size=pool_size,
             )
@@ -649,6 +656,7 @@ class AILab_QwenVL_GGUF(QwenVLGGUFBase):
             n_batch=None,
             gpu_layers=None,
             image_max_tokens=None,
+            image_min_tokens=None,
             top_k=None,
             pool_size=None,
             enable_thinking=enable_thinking,
@@ -685,6 +693,7 @@ class AILab_QwenVL_GGUF_Advanced(QwenVLGGUFBase):
                 "n_batch": ("INT", {"default": 512, "min": 64, "max": 32768, "step": 64}),
                 "gpu_layers": ("INT", {"default": -1, "min": -1, "max": 200}),
                 "image_max_tokens": ("INT", {"default": 4096, "min": 256, "max": 1024000, "step": 256}),
+                "image_min_tokens": ("INT", {"default": 1024, "min": 64, "max": 1024000, "step": 64}),
                 "top_k": ("INT", {"default": 0, "min": 0, "max": 32768}),
                 "pool_size": ("INT", {"default": 4194304, "min": 1048576, "max": 10485760, "step": 524288}),
                 "enable_thinking": ("BOOLEAN", {"default": False}),
@@ -717,6 +726,7 @@ class AILab_QwenVL_GGUF_Advanced(QwenVLGGUFBase):
         n_batch,
         gpu_layers,
         image_max_tokens,
+        image_min_tokens,
         top_k,
         pool_size,
         enable_thinking,
@@ -743,6 +753,7 @@ class AILab_QwenVL_GGUF_Advanced(QwenVLGGUFBase):
             n_batch=n_batch,
             gpu_layers=gpu_layers,
             image_max_tokens=image_max_tokens,
+            image_min_tokens=image_min_tokens,
             top_k=top_k,
             pool_size=pool_size,
             enable_thinking=enable_thinking,
