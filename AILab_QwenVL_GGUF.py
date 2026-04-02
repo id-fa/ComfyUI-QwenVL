@@ -474,6 +474,7 @@ class QwenVLGGUFBase:
         top_p: float,
         repetition_penalty: float,
         seed: int,
+        stop_words: list[str] | None = None,
     ) -> str:
         if images_b64:
             content = [{"type": "text", "text": user_prompt}]
@@ -499,7 +500,7 @@ class QwenVLGGUFBase:
             top_p=float(top_p),
             repeat_penalty=float(repetition_penalty),
             seed=int(seed),
-            stop=["<|im_end|>", "<|im_start|>"],
+            stop=["<|im_end|>", "<|im_start|>"] + (stop_words or []),
         )
         elapsed = max(time.perf_counter() - start, 1e-6)
 
@@ -543,6 +544,7 @@ class QwenVLGGUFBase:
         top_k: int | None,
         pool_size: int | None,
         enable_thinking: bool = False,
+        stop_words: list[str] | None = None,
     ):
         torch.manual_seed(int(seed))
 
@@ -587,6 +589,7 @@ class QwenVLGGUFBase:
                 top_p=top_p,
                 repetition_penalty=repetition_penalty,
                 seed=seed,
+                stop_words=stop_words,
             )
             return (text,)
         finally:
@@ -697,6 +700,7 @@ class AILab_QwenVL_GGUF_Advanced(QwenVLGGUFBase):
                 "top_k": ("INT", {"default": 0, "min": 0, "max": 32768}),
                 "pool_size": ("INT", {"default": 4194304, "min": 1048576, "max": 10485760, "step": 524288}),
                 "enable_thinking": ("BOOLEAN", {"default": False}),
+                "stop_words": ("STRING", {"default": ""}),
                 "keep_model_loaded": ("BOOLEAN", {"default": True}),
                 "seed": ("INT", {"default": 1, "min": 1, "max": 2**32 - 1}),
             },
@@ -730,11 +734,13 @@ class AILab_QwenVL_GGUF_Advanced(QwenVLGGUFBase):
         top_k,
         pool_size,
         enable_thinking,
+        stop_words,
         keep_model_loaded,
         seed,
         image=None,
         video=None,
     ):
+        parsed = [w.strip() for w in stop_words.split(",") if w.strip()] if stop_words else None
         return self.run(
             model_name=model_name,
             preset_prompt=preset_prompt,
@@ -757,6 +763,7 @@ class AILab_QwenVL_GGUF_Advanced(QwenVLGGUFBase):
             top_k=top_k,
             pool_size=pool_size,
             enable_thinking=enable_thinking,
+            stop_words=parsed,
         )
 
 

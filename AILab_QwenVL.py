@@ -73,6 +73,7 @@ TOOLTIPS = {
     "repetition_penalty": "Values >1 (e.g., 1.1–1.3) penalize repeated phrases; 1.0 leaves logits untouched.",
     "frame_count": "Number of frames extracted from video inputs before prompting Qwen-VL. More frames provide context but cost time.",
     "enable_thinking": "Enable thinking mode for Qwen3-VL Thinking models. When disabled, the model skips chain-of-thought reasoning and responds directly. Has no effect on non-Thinking models.",
+    "stop_words": "Comma-separated list of stop words/sequences. Generation stops when any of these strings is produced. Leave empty for default behavior.",
 }
 
 class Quantization(str, Enum):
@@ -783,6 +784,7 @@ class QwenVLBase:
         num_beams,
         repetition_penalty,
         enable_thinking=None,
+        stop_words=None,
     ):
         conversation = [{"role": "user", "content": []}]
         if image is not None:
@@ -811,6 +813,11 @@ class QwenVLBase:
         stop_tokens = [self.tokenizer.eos_token_id]
         if hasattr(self.tokenizer, "eot_id") and self.tokenizer.eot_id is not None:
             stop_tokens.append(self.tokenizer.eot_id)
+        if stop_words:
+            for word in stop_words:
+                ids = self.tokenizer.encode(word, add_special_tokens=False)
+                if ids:
+                    stop_tokens.append(ids[-1])
         kwargs = {
             "max_new_tokens": max_tokens,
             "repetition_penalty": repetition_penalty,
@@ -830,7 +837,7 @@ class QwenVLBase:
         text = clean_model_output(text, OutputCleanConfig(mode="text", strip_think=True))
         return text.strip()
 
-    def run(self, model_name, quantization, preset_prompt, custom_prompt, image, video, frame_count, max_tokens, temperature, top_p, num_beams, repetition_penalty, seed, keep_model_loaded, attention_mode, use_torch_compile, device, enable_thinking=None):
+    def run(self, model_name, quantization, preset_prompt, custom_prompt, image, video, frame_count, max_tokens, temperature, top_p, num_beams, repetition_penalty, seed, keep_model_loaded, attention_mode, use_torch_compile, device, enable_thinking=None, stop_words=None):
         # Create progress bar with 3 stages: setup, model loading, generation
         pbar = ProgressBar(3)
         
@@ -864,8 +871,9 @@ class QwenVLBase:
                 num_beams,
                 repetition_penalty,
                 enable_thinking=enable_thinking,
+                stop_words=stop_words,
             )
-            
+
             pbar.update_absolute(3, 3, None)
             
             return (text,)
@@ -936,6 +944,7 @@ class AILab_QwenVL_Advanced(QwenVLBase):
                 "repetition_penalty": ("FLOAT", {"default": 1.2, "min": 0.5, "max": 2.0, "tooltip": TOOLTIPS["repetition_penalty"]}),
                 "frame_count": ("INT", {"default": 16, "min": 1, "max": 64, "tooltip": TOOLTIPS["frame_count"]}),
                 "enable_thinking": ("BOOLEAN", {"default": False, "tooltip": TOOLTIPS["enable_thinking"]}),
+                "stop_words": ("STRING", {"default": "", "tooltip": TOOLTIPS["stop_words"]}),
                 "keep_model_loaded": ("BOOLEAN", {"default": True, "tooltip": TOOLTIPS["keep_model_loaded"]}),
                 "seed": ("INT", {"default": 1, "min": 1, "max": 2**32 - 1, "tooltip": TOOLTIPS["seed"]}),
             },
@@ -950,8 +959,9 @@ class AILab_QwenVL_Advanced(QwenVLBase):
     FUNCTION = "process"
     CATEGORY = "🧪AILab/QwenVL"
 
-    def process(self, model_name, quantization, attention_mode, use_torch_compile, device, preset_prompt, custom_prompt, max_tokens, temperature, top_p, num_beams, repetition_penalty, frame_count, enable_thinking, keep_model_loaded, seed, image=None, video=None):
-        return self.run(model_name, quantization, preset_prompt, custom_prompt, image, video, frame_count, max_tokens, temperature, top_p, num_beams, repetition_penalty, seed, keep_model_loaded, attention_mode, use_torch_compile, device, enable_thinking=enable_thinking)
+    def process(self, model_name, quantization, attention_mode, use_torch_compile, device, preset_prompt, custom_prompt, max_tokens, temperature, top_p, num_beams, repetition_penalty, frame_count, enable_thinking, stop_words, keep_model_loaded, seed, image=None, video=None):
+        parsed = [w.strip() for w in stop_words.split(",") if w.strip()] if stop_words else None
+        return self.run(model_name, quantization, preset_prompt, custom_prompt, image, video, frame_count, max_tokens, temperature, top_p, num_beams, repetition_penalty, seed, keep_model_loaded, attention_mode, use_torch_compile, device, enable_thinking=enable_thinking, stop_words=parsed)
 
 NODE_CLASS_MAPPINGS = {
     "AILab_QwenVL": AILab_QwenVL,
