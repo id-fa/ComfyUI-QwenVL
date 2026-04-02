@@ -132,6 +132,25 @@
         "top_k": 0,
         "pool_size": 4194304
       }
+    },
+    "Huihui-Qwen3.5-4B-abliterated-GGUF": {
+      "author": "mradermacher",
+      "repo_name": "Huihui-Qwen3.5-4B-abliterated-GGUF",
+      "repo_id": "mradermacher/Huihui-Qwen3.5-4B-abliterated-GGUF",
+      "mmproj_file": "Huihui-Qwen3.5-4B-abliterated.mmproj-Q8_0.gguf",
+      "model_files": [
+        "Huihui-Qwen3.5-4B-abliterated.Q4_K_M.gguf",
+        "Huihui-Qwen3.5-4B-abliterated.Q6_K.gguf",
+        "Huihui-Qwen3.5-4B-abliterated.Q8_0.gguf"
+      ],
+      "defaults": {
+        "context_length": 8192,
+        "image_max_tokens": 4096,
+        "n_batch": 512,
+        "gpu_layers": -1,
+        "top_k": 0,
+        "pool_size": 4194304
+      }
     }
   }
 }
