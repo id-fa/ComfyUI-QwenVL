@@ -536,12 +536,16 @@ class QwenVLGGUFBase:
         image_max_tokens: int | None,
         top_k: int | None,
         pool_size: int | None,
+        enable_thinking: bool = False,
     ):
         torch.manual_seed(int(seed))
 
         prompt = SYSTEM_PROMPTS.get(preset_prompt, preset_prompt)
         if custom_prompt and custom_prompt.strip():
             prompt = custom_prompt.strip()
+
+        think_prefix = "/think" if enable_thinking else "/no_think"
+        prompt = f"{think_prefix}\n{prompt}"
 
         images_b64: list[str] = []
         if image is not None:
@@ -568,10 +572,7 @@ class QwenVLGGUFBase:
             if images_b64 and self.chat_handler is None:
                 print("[QwenVL] Warning: images provided but this model entry has no mmproj_file; images will be ignored")
             text = self._invoke(
-                system_prompt=(
-                    "You are a helpful vision-language assistant. "
-                    "Answer directly with the final answer only. No <think> and no reasoning."
-                ),
+                system_prompt="You are a helpful vision-language assistant.",
                 user_prompt=prompt,
                 images_b64=images_b64 if self.chat_handler is not None else [],
                 max_tokens=max_tokens,
@@ -603,6 +604,7 @@ class AILab_QwenVL_GGUF(QwenVLGGUFBase):
                 "preset_prompt": (prompts, {"default": default_prompt}),
                 "custom_prompt": ("STRING", {"default": "", "multiline": True}),
                 "max_tokens": ("INT", {"default": 512, "min": 64, "max": 2048}),
+                "enable_thinking": ("BOOLEAN", {"default": False}),
                 "keep_model_loaded": ("BOOLEAN", {"default": True}),
                 "seed": ("INT", {"default": 1, "min": 1, "max": 2**32 - 1}),
             },
@@ -623,6 +625,7 @@ class AILab_QwenVL_GGUF(QwenVLGGUFBase):
         preset_prompt,
         custom_prompt,
         max_tokens,
+        enable_thinking,
         keep_model_loaded,
         seed,
         image=None,
@@ -648,6 +651,7 @@ class AILab_QwenVL_GGUF(QwenVLGGUFBase):
             image_max_tokens=None,
             top_k=None,
             pool_size=None,
+            enable_thinking=enable_thinking,
         )
 
 
@@ -683,6 +687,7 @@ class AILab_QwenVL_GGUF_Advanced(QwenVLGGUFBase):
                 "image_max_tokens": ("INT", {"default": 4096, "min": 256, "max": 1024000, "step": 256}),
                 "top_k": ("INT", {"default": 0, "min": 0, "max": 32768}),
                 "pool_size": ("INT", {"default": 4194304, "min": 1048576, "max": 10485760, "step": 524288}),
+                "enable_thinking": ("BOOLEAN", {"default": False}),
                 "keep_model_loaded": ("BOOLEAN", {"default": True}),
                 "seed": ("INT", {"default": 1, "min": 1, "max": 2**32 - 1}),
             },
@@ -714,6 +719,7 @@ class AILab_QwenVL_GGUF_Advanced(QwenVLGGUFBase):
         image_max_tokens,
         top_k,
         pool_size,
+        enable_thinking,
         keep_model_loaded,
         seed,
         image=None,
@@ -739,6 +745,7 @@ class AILab_QwenVL_GGUF_Advanced(QwenVLGGUFBase):
             image_max_tokens=image_max_tokens,
             top_k=top_k,
             pool_size=pool_size,
+            enable_thinking=enable_thinking,
         )
 
 

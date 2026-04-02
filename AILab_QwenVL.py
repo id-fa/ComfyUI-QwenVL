@@ -33,6 +33,7 @@ from transformers import AutoProcessor, AutoTokenizer, BitsAndBytesConfig
 
 import folder_paths
 from comfy.utils import ProgressBar
+from AILab_OutputCleaner import clean_model_output, OutputCleanConfig
 
 # SageAttention support
 try:
@@ -71,6 +72,7 @@ TOOLTIPS = {
     "num_beams": "Beam-search width. Values >1 disable temperature/top_p and trade speed for more stable answers.",
     "repetition_penalty": "Values >1 (e.g., 1.1–1.3) penalize repeated phrases; 1.0 leaves logits untouched.",
     "frame_count": "Number of frames extracted from video inputs before prompting Qwen-VL. More frames provide context but cost time.",
+    "enable_thinking": "Enable thinking mode for Qwen3-VL Thinking models. When disabled, the model skips chain-of-thought reasoning and responds directly. Has no effect on non-Thinking models.",
 }
 
 class Quantization(str, Enum):
@@ -780,6 +782,7 @@ class QwenVLBase:
         top_p,
         num_beams,
         repetition_penalty,
+        enable_thinking=None,
     ):
         conversation = [{"role": "user", "content": []}]
         if image is not None:
@@ -792,7 +795,10 @@ class QwenVLBase:
             if frames:
                 conversation[0]["content"].append({"type": "video", "video": frames})
         conversation[0]["content"].append({"type": "text", "text": prompt_text})
-        chat = self.processor.apply_chat_template(conversation, tokenize=False, add_generation_prompt=True)
+        template_kwargs = {}
+        if enable_thinking is not None:
+            template_kwargs["chat_template_kwargs"] = {"enable_thinking": enable_thinking}
+        chat = self.processor.apply_chat_template(conversation, tokenize=False, add_generation_prompt=True, **template_kwargs)
         images = [item["image"] for item in conversation[0]["content"] if item["type"] == "image"]
         video_frames = [frame for item in conversation[0]["content"] if item["type"] == "video" for frame in item["video"]]
         videos = [video_frames] if video_frames else None
@@ -821,9 +827,10 @@ class QwenVLBase:
             torch.cuda.synchronize()
         input_len = model_inputs["input_ids"].shape[-1]
         text = self.tokenizer.decode(outputs[0, input_len:], skip_special_tokens=True)
+        text = clean_model_output(text, OutputCleanConfig(mode="text", strip_think=True))
         return text.strip()
 
-    def run(self, model_name, quantization, preset_prompt, custom_prompt, image, video, frame_count, max_tokens, temperature, top_p, num_beams, repetition_penalty, seed, keep_model_loaded, attention_mode, use_torch_compile, device):
+    def run(self, model_name, quantization, preset_prompt, custom_prompt, image, video, frame_count, max_tokens, temperature, top_p, num_beams, repetition_penalty, seed, keep_model_loaded, attention_mode, use_torch_compile, device, enable_thinking=None):
         # Create progress bar with 3 stages: setup, model loading, generation
         pbar = ProgressBar(3)
         
@@ -856,6 +863,7 @@ class QwenVLBase:
                 top_p,
                 num_beams,
                 repetition_penalty,
+                enable_thinking=enable_thinking,
             )
             
             pbar.update_absolute(3, 3, None)
@@ -881,6 +889,7 @@ class AILab_QwenVL(QwenVLBase):
                 "preset_prompt": (prompts, {"default": default_prompt, "tooltip": TOOLTIPS["preset_prompt"]}),
                 "custom_prompt": ("STRING", {"default": "", "multiline": True, "tooltip": TOOLTIPS["custom_prompt"]}),
                 "max_tokens": ("INT", {"default": 512, "min": 64, "max": 2048, "tooltip": TOOLTIPS["max_tokens"]}),
+                "enable_thinking": ("BOOLEAN", {"default": False, "tooltip": TOOLTIPS["enable_thinking"]}),
                 "keep_model_loaded": ("BOOLEAN", {"default": True, "tooltip": TOOLTIPS["keep_model_loaded"]}),
                 "seed": ("INT", {"default": 1, "min": 1, "max": 2**32 - 1, "tooltip": TOOLTIPS["seed"]}),
             },
@@ -895,8 +904,8 @@ class AILab_QwenVL(QwenVLBase):
     FUNCTION = "process"
     CATEGORY = "🧪AILab/QwenVL"
 
-    def process(self, model_name, quantization, preset_prompt, custom_prompt, attention_mode, max_tokens, keep_model_loaded, seed, image=None, video=None):
-        return self.run(model_name, quantization, preset_prompt, custom_prompt, image, video, 16, max_tokens, 0.6, 0.9, 1, 1.2, seed, keep_model_loaded, attention_mode, False, "auto")
+    def process(self, model_name, quantization, preset_prompt, custom_prompt, attention_mode, max_tokens, enable_thinking, keep_model_loaded, seed, image=None, video=None):
+        return self.run(model_name, quantization, preset_prompt, custom_prompt, image, video, 16, max_tokens, 0.6, 0.9, 1, 1.2, seed, keep_model_loaded, attention_mode, False, "auto", enable_thinking=enable_thinking)
 
 class AILab_QwenVL_Advanced(QwenVLBase):
     @classmethod
@@ -926,6 +935,7 @@ class AILab_QwenVL_Advanced(QwenVLBase):
                 "num_beams": ("INT", {"default": 1, "min": 1, "max": 8, "tooltip": TOOLTIPS["num_beams"]}),
                 "repetition_penalty": ("FLOAT", {"default": 1.2, "min": 0.5, "max": 2.0, "tooltip": TOOLTIPS["repetition_penalty"]}),
                 "frame_count": ("INT", {"default": 16, "min": 1, "max": 64, "tooltip": TOOLTIPS["frame_count"]}),
+                "enable_thinking": ("BOOLEAN", {"default": False, "tooltip": TOOLTIPS["enable_thinking"]}),
                 "keep_model_loaded": ("BOOLEAN", {"default": True, "tooltip": TOOLTIPS["keep_model_loaded"]}),
                 "seed": ("INT", {"default": 1, "min": 1, "max": 2**32 - 1, "tooltip": TOOLTIPS["seed"]}),
             },
@@ -940,8 +950,8 @@ class AILab_QwenVL_Advanced(QwenVLBase):
     FUNCTION = "process"
     CATEGORY = "🧪AILab/QwenVL"
 
-    def process(self, model_name, quantization, attention_mode, use_torch_compile, device, preset_prompt, custom_prompt, max_tokens, temperature, top_p, num_beams, repetition_penalty, frame_count, keep_model_loaded, seed, image=None, video=None):
-        return self.run(model_name, quantization, preset_prompt, custom_prompt, image, video, frame_count, max_tokens, temperature, top_p, num_beams, repetition_penalty, seed, keep_model_loaded, attention_mode, use_torch_compile, device)
+    def process(self, model_name, quantization, attention_mode, use_torch_compile, device, preset_prompt, custom_prompt, max_tokens, temperature, top_p, num_beams, repetition_penalty, frame_count, enable_thinking, keep_model_loaded, seed, image=None, video=None):
+        return self.run(model_name, quantization, preset_prompt, custom_prompt, image, video, frame_count, max_tokens, temperature, top_p, num_beams, repetition_penalty, seed, keep_model_loaded, attention_mode, use_torch_compile, device, enable_thinking=enable_thinking)
 
 NODE_CLASS_MAPPINGS = {
     "AILab_QwenVL": AILab_QwenVL,
