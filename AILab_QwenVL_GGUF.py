@@ -119,15 +119,15 @@ def _model_name_to_filename_candidates(model_name: str) -> set[str]:
 
 def _load_gguf_vl_catalog():
     if not GGUF_CONFIG_PATH.exists():
-        return {"base_dir": "LLM/GGUF", "models": {}}
+        return {"base_dir": "LLM", "models": {}}
     try:
         with open(GGUF_CONFIG_PATH, "r", encoding="utf-8") as fh:
             data = json.load(fh) or {}
     except Exception as exc:
         print(f"[QwenVL] gguf_models.json load failed: {exc}")
-        return {"base_dir": "LLM/GGUF", "models": {}}
+        return {"base_dir": "LLM", "models": {}}
 
-    base_dir = data.get("base_dir") or "LLM/GGUF"
+    base_dir = data.get("base_dir") or "LLM"
 
     flattened: dict[str, dict] = {}
 
@@ -344,7 +344,7 @@ class QwenVLGGUFBase:
         self._load_backend()
 
         resolved = _resolve_model_entry(model_name)
-        base_dir = _resolve_base_dir(GGUF_VL_CATALOG.get("base_dir") or "llm/GGUF")
+        base_dir = _resolve_base_dir(GGUF_VL_CATALOG.get("base_dir") or "LLM")
 
         author_dir = _safe_dirname(resolved.author or "")
         repo_dir = _safe_dirname(resolved.repo_dirname)

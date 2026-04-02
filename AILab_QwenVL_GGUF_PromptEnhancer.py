@@ -97,7 +97,7 @@ class AILab_QwenVL_GGUF_PromptEnhancer:
     @staticmethod
     def load_gguf_models():
         fallback = {
-            "base_dir": "LLM/GGUF",
+            "base_dir": "LLM",
             "models": {},
         }
         if not GGUF_CONFIG_PATH.exists():
@@ -194,7 +194,7 @@ class AILab_QwenVL_GGUF_PromptEnhancer:
                     entry = candidate
                     break
 
-        base_dir = _resolve_base_dir(self.gguf_models.get("base_dir") or "LLM/GGUF")
+        base_dir = _resolve_base_dir(self.gguf_models.get("base_dir") or "LLM")
 
         path = entry.get("path")
         if path:
