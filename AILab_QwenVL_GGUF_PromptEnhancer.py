@@ -58,6 +58,13 @@ def _resolve_base_dir(base_dir_value: str) -> Path:
     base_dir = Path(base_dir_value)
     if base_dir.is_absolute():
         return base_dir
+    # Check extra_model_paths.yaml via folder_paths
+    folder_key = base_dir.parts[0] if base_dir.parts else base_dir_value
+    sub_path = Path(*base_dir.parts[1:]) if len(base_dir.parts) > 1 else Path()
+    if folder_key in folder_paths.folder_names_and_paths:
+        paths = folder_paths.get_folder_paths(folder_key)
+        if paths:
+            return Path(paths[0]) / sub_path
     return Path(folder_paths.models_dir) / base_dir
 
 

@@ -51,6 +51,7 @@ SYSTEM_PROMPTS_PATH = NODE_DIR / "AILab_System_Prompts.json"
 HF_VL_MODELS: dict[str, dict] = {}
 HF_TEXT_MODELS: dict[str, dict] = {}
 HF_ALL_MODELS: dict[str, dict] = {}
+HF_BASE_DIR: str = "LLM"
 SYSTEM_PROMPTS = {}
 PRESET_PROMPTS: list[str] = ["Describe this image in detail."]
 
@@ -91,10 +92,11 @@ class Quantization(str, Enum):
 ATTENTION_MODES = ["auto", "sage", "flash_attention_2", "sdpa"]
 
 def load_model_configs():
-    global HF_VL_MODELS, HF_TEXT_MODELS, HF_ALL_MODELS, SYSTEM_PROMPTS, PRESET_PROMPTS
+    global HF_VL_MODELS, HF_TEXT_MODELS, HF_ALL_MODELS, HF_BASE_DIR, SYSTEM_PROMPTS, PRESET_PROMPTS
     try:
         with open(CONFIG_PATH, "r", encoding="utf-8") as fh:
             data = json.load(fh) or {}
+        HF_BASE_DIR = data.get("base_dir") or "LLM"
         if "hf_vl_models" in data or "hf_text_models" in data:
             HF_VL_MODELS = data.get("hf_vl_models") or {}
             HF_TEXT_MODELS = data.get("hf_text_models") or {}
@@ -451,19 +453,26 @@ def set_sage_attention(model):
     else:
         print("[QwenVL] SageAttention: No compatible attention layers found to patch")
 
+def _resolve_hf_base_dir() -> Path:
+    base_dir = Path(HF_BASE_DIR)
+    if base_dir.is_absolute():
+        return base_dir
+    # Check extra_model_paths.yaml via folder_paths
+    folder_key = base_dir.parts[0] if base_dir.parts else "LLM"
+    sub_path = Path(*base_dir.parts[1:]) if len(base_dir.parts) > 1 else Path()
+    if folder_key in folder_paths.folder_names_and_paths:
+        paths = folder_paths.get_folder_paths(folder_key)
+        if paths:
+            return Path(paths[0]) / sub_path
+    return Path(folder_paths.models_dir) / base_dir
+
 def ensure_model(model_name):
     info = HF_ALL_MODELS.get(model_name)
     if not info:
         raise ValueError(f"Model '{model_name}' not in config")
     repo_id = info["repo_id"]
 
-    # Use ComfyUI's multi-path system if available
-    llm_paths = folder_paths.get_folder_paths("LLM") if "LLM" in folder_paths.folder_names_and_paths else []
-    if llm_paths:
-        models_dir = Path(llm_paths[0]) / "Qwen-VL"
-    else:
-        # Fallback to default behavior
-        models_dir = Path(folder_paths.models_dir) / "LLM" / "Qwen-VL"
+    models_dir = _resolve_hf_base_dir()
 
     models_dir.mkdir(parents=True, exist_ok=True)
     target = models_dir / repo_id.split("/")[-1]
