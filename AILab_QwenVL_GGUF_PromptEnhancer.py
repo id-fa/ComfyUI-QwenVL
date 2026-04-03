@@ -82,6 +82,33 @@ def _model_name_to_filename_candidates(model_name: str) -> set[str]:
     return candidates
 
 
+LOCAL_PREFIX = "[local] "
+
+
+def _scan_local_gguf_files(catalog: dict) -> dict[str, Path]:
+    """Scan base_dir for .gguf files not already in the given catalog."""
+    base_dir = _resolve_base_dir(catalog.get("base_dir") or "LLM")
+    if not base_dir.is_dir():
+        return {}
+    catalog_filenames: set[str] = set()
+    for entry in (catalog.get("models") or {}).values():
+        fn = (entry or {}).get("filename")
+        if fn:
+            catalog_filenames.add(Path(fn).name)
+    found: dict[str, Path] = {}
+    for p in base_dir.rglob("*.gguf"):
+        if not p.is_file() or "mmproj" in p.name.lower():
+            continue
+        if p.name in catalog_filenames:
+            continue
+        try:
+            rel = p.relative_to(base_dir)
+        except ValueError:
+            rel = Path(p.name)
+        found[f"{LOCAL_PREFIX}{rel}"] = p
+    return found
+
+
 class AILab_QwenVL_GGUF_PromptEnhancer:
     RETURN_TYPES = ("STRING",)
     RETURN_NAMES = ("ENHANCED_OUTPUT",)
@@ -159,7 +186,10 @@ class AILab_QwenVL_GGUF_PromptEnhancer:
         preferred_style = "📝 Enhance"
         default_style = preferred_style if preferred_style in styles else (styles[0] if styles else "📝 Enhance")
         temp = cls.load_gguf_models()
-        model_keys = sorted(list((temp.get("models") or {}).keys())) or ["(edit gguf_models.json)"]
+        model_keys = sorted(list((temp.get("models") or {}).keys()))
+        local_files = _scan_local_gguf_files(temp)
+        local_keys = sorted(local_files.keys())
+        model_keys = (model_keys + local_keys) or ["(edit gguf_models.json)"]
         default_model = model_keys[0]
         return {
             "required": {
@@ -182,6 +212,13 @@ class AILab_QwenVL_GGUF_PromptEnhancer:
         self.current_signature = None
 
     def _resolve_model_path(self, model_name):
+        if model_name.startswith(LOCAL_PREFIX):
+            local_files = _scan_local_gguf_files(self.gguf_models)
+            local_path = local_files.get(model_name)
+            if local_path is not None and local_path.is_file():
+                return local_path
+            raise FileNotFoundError(f"[QwenVL] Local GGUF not found: {model_name}")
+
         models = self.gguf_models.get("models") or {}
         entry = models.get(model_name) or {}
 
@@ -213,6 +250,8 @@ class AILab_QwenVL_GGUF_PromptEnhancer:
     def _maybe_download_model(self, model_name, resolved):
         if resolved.exists():
             return
+        if model_name.startswith(LOCAL_PREFIX):
+            raise FileNotFoundError(f"[QwenVL] Local GGUF file not found: {resolved}")
         models = self.gguf_models.get("models") or {}
         entry = models.get(model_name) or {}
         if not entry:
