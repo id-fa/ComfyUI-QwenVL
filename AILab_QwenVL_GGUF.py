@@ -297,9 +297,9 @@ def _resolve_model_entry(model_name: str) -> GGUFVLResolved:
         local_path = LOCAL_GGUF_FILES.get(model_name)
         if local_path is None or not local_path.is_file():
             raise FileNotFoundError(f"[QwenVL] Local GGUF not found: {model_name}")
-        # Auto-detect mmproj in the same directory
+        # Auto-detect mmproj in the same directory (matches both "mmproj-*.gguf" and "*.mmproj-*.gguf")
         mmproj = None
-        for candidate in sorted(local_path.parent.glob("mmproj*.gguf")):
+        for candidate in sorted(local_path.parent.glob("*mmproj*.gguf")):
             if candidate.is_file():
                 mmproj = candidate.name
                 break
@@ -685,7 +685,7 @@ class AILab_QwenVL_GGUF(QwenVLGGUFBase):
                 "model_name": (model_keys, {"default": default_model}),
                 "preset_prompt": (prompts, {"default": default_prompt}),
                 "custom_prompt": ("STRING", {"default": "", "multiline": True}),
-                "max_tokens": ("INT", {"default": 512, "min": 64, "max": 2048}),
+                "max_tokens": ("INT", {"default": 512, "min": 64, "max": 32768}),
                 "enable_thinking": ("BOOLEAN", {"default": False}),
                 "keep_model_loaded": ("BOOLEAN", {"default": True}),
                 "seed": ("INT", {"default": 1, "min": 1, "max": 2**32 - 1}),
@@ -761,7 +761,7 @@ class AILab_QwenVL_GGUF_Advanced(QwenVLGGUFBase):
                 "device": (device_options, {"default": "auto"}),
                 "preset_prompt": (prompts, {"default": default_prompt}),
                 "custom_prompt": ("STRING", {"default": "", "multiline": True}),
-                "max_tokens": ("INT", {"default": 512, "min": 64, "max": 4096}),
+                "max_tokens": ("INT", {"default": 512, "min": 64, "max": 32768}),
                 "temperature": ("FLOAT", {"default": 0.6, "min": 0.0, "max": 2.0}),
                 "top_p": ("FLOAT", {"default": 0.9, "min": 0.0, "max": 1.0}),
                 "repetition_penalty": ("FLOAT", {"default": 1.2, "min": 0.5, "max": 2.0}),

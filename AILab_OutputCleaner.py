@@ -52,10 +52,9 @@ def clean_model_output(text: str, config: OutputCleanConfig | None = None) -> st
         cleaned = _THINK_BLOCK_RE.sub("", cleaned)
         cleaned = _THINK_CLOSE_RE.sub("", cleaned)
         if _THINK_OPEN_RE.search(cleaned):
-            cleaned = _THINK_OPEN_RE.sub("", cleaned)
-            parts = re.split(r"\n\s*\n", cleaned, maxsplit=1)
-            if len(parts) == 2:
-                cleaned = parts[1]
+            # Unclosed <think> — remove the tag and everything after it
+            # (happens when max_tokens cuts off mid-thought)
+            cleaned = _THINK_OPEN_RE.split(cleaned)[0]
         cleaned = cleaned.strip()
 
     cleaned = _IM_TOKEN_RE.sub("", cleaned).strip()
