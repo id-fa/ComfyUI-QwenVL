@@ -231,6 +231,14 @@ class AILab_QwenVL_GGUF_PromptEnhancer:
                     entry = candidate
                     break
 
+        # Fallback: try as local file if not found in catalog
+        if not entry or not entry.get("filename"):
+            local_key = f"{LOCAL_PREFIX}{model_name}"
+            local_files = _scan_local_gguf_files(self.gguf_models)
+            local_path = local_files.get(local_key)
+            if local_path is not None and local_path.is_file():
+                return local_path
+
         base_dir = _resolve_base_dir(self.gguf_models.get("base_dir") or "LLM")
 
         path = entry.get("path")

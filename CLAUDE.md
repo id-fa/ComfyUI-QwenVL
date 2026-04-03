@@ -68,6 +68,7 @@ HF・GGUF両バックエンドで `base_dir` と `extra_model_paths.yaml` の両
 
 - **VLノード** (`AILab_QwenVL_GGUF.py`): モジュール読み込み時に `_scan_local_gguf_files()` → `LOCAL_GGUF_FILES` にキャッシュ。`_resolve_model_entry()` と `_load_model()` で `LOCAL_PREFIX` 判定して直接パスを使用。同ディレクトリの `*mmproj*.gguf`（中間一致）を自動検出してVision対応。
 - **PromptEnhancer** (`AILab_QwenVL_GGUF_PromptEnhancer.py`): `INPUT_TYPES` 呼び出し時に `_scan_local_gguf_files(catalog)` でスキャン。`_resolve_model_path()` で `LOCAL_PREFIX` 判定して直接パスを返却。mmproj不要（テキスト専用）。
+- **カタログ未登録フォールバック**: APIから `[local]` プレフィクスなしのモデル名が渡され、カタログにも該当がない場合、自動的に `[local] {model_name}` で `LOCAL_GGUF_FILES` を再検索する。VLノード側は `_resolve_model_entry()` 内で再帰呼び出し、PromptEnhancer側は `_resolve_model_path()` 内でローカルスキャン結果を照合する。`_load_model()` のローカルファイル判定は `resolved.repo_id is None` で行う。
 - ローカルファイルは `repo_id=None` のためダウンロード処理はスキップされる。パラメータのデフォルト値（ctx=8192, gpu_layers=-1 等）はAdvancedノードのUIで上書き可能。
 
 ### Configuration Files

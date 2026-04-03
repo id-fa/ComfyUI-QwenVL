@@ -331,6 +331,12 @@ def _resolve_model_entry(model_name: str) -> GGUFVLResolved:
                 entry = candidate
                 break
 
+    # --- Fallback: try as local file if not found in catalog ---
+    if not entry or not entry.get("filename"):
+        local_key = f"{LOCAL_PREFIX}{model_name}"
+        if local_key in LOCAL_GGUF_FILES:
+            return _resolve_model_entry(local_key)
+
     repo_id = entry.get("repo_id")
     alt_repo_ids = entry.get("alt_repo_ids") or []
 
@@ -406,9 +412,10 @@ class QwenVLGGUFBase:
 
         resolved = _resolve_model_entry(model_name)
 
-        if model_name.startswith(LOCAL_PREFIX):
+        if resolved.repo_id is None:
             # Local file: path comes directly from scan results
-            local_path = LOCAL_GGUF_FILES.get(model_name)
+            local_key = model_name if model_name.startswith(LOCAL_PREFIX) else f"{LOCAL_PREFIX}{model_name}"
+            local_path = LOCAL_GGUF_FILES.get(local_key)
             if local_path is None or not local_path.is_file():
                 raise FileNotFoundError(f"[QwenVL] Local GGUF not found: {model_name}")
             model_path = local_path
