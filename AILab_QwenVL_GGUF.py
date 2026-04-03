@@ -842,11 +842,11 @@ class AILab_QwenVL_GGUF_Advanced(QwenVLGGUFBase):
 
 
 NODE_CLASS_MAPPINGS = {
-    "AILab_QwenVL_GGUF": AILab_QwenVL_GGUF,
-    "AILab_QwenVL_GGUF_Advanced": AILab_QwenVL_GGUF_Advanced,
+    "QwenVL-F_GGUF": AILab_QwenVL_GGUF,
+    "QwenVL-F_GGUF_Advanced": AILab_QwenVL_GGUF_Advanced,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "AILab_QwenVL_GGUF": "QwenVL (GGUF)",
-    "AILab_QwenVL_GGUF_Advanced": "QwenVL Advanced (GGUF)",
+    "QwenVL-F_GGUF": "QwenVL-F (GGUF)",
+    "QwenVL-F_GGUF_Advanced": "QwenVL-F Advanced (GGUF)",
 }

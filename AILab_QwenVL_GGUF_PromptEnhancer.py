@@ -467,9 +467,9 @@ class AILab_QwenVL_GGUF_PromptEnhancer:
 
 
 NODE_CLASS_MAPPINGS = {
-    "AILab_QwenVL_GGUF_PromptEnhancer": AILab_QwenVL_GGUF_PromptEnhancer,
+    "QwenVL-F_GGUF_PromptEnhancer": AILab_QwenVL_GGUF_PromptEnhancer,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "AILab_QwenVL_GGUF_PromptEnhancer": "QwenVL Prompt Enhancer (GGUF)",
+    "QwenVL-F_GGUF_PromptEnhancer": "QwenVL-F Prompt Enhancer (GGUF)",
 }
