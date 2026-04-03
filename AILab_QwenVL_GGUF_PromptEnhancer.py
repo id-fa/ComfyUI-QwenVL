@@ -113,7 +113,7 @@ class AILab_QwenVL_GGUF_PromptEnhancer:
     RETURN_TYPES = ("STRING",)
     RETURN_NAMES = ("ENHANCED_OUTPUT",)
     FUNCTION = "process"
-    CATEGORY = "QwenVL-f"
+    CATEGORY = "QwenVL-F"
 
     def __init__(self):
         self.llm = None
