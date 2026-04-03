@@ -151,6 +151,43 @@
         "top_k": 0,
         "pool_size": 4194304
       }
+    },
+    "qwen3.5-9b-null-space-abliterated-GGUF": {
+      "author": "jwest33",
+      "repo_name": "qwen3.5-9b-null-space-abliterated-GGUF",
+      "repo_id": "jwest33/qwen3.5-9b-null-space-abliterated-GGUF",
+      "mmproj_file": "mmproj-qwen3.5-9b-f16.gguf",
+      "model_files": [
+        "qwen3.5-9b-null-space-abliterated-q6_k.gguf",
+        "qwen3.5-9b-null-space-abliterated-q8_0.gguf"
+      ],
+      "defaults": {
+        "context_length": 8192,
+        "image_max_tokens": 4096,
+        "n_batch": 512,
+        "gpu_layers": -1,
+        "top_k": 0,
+        "pool_size": 4194304
+      }
+    },
+    "Qwen3.5-9B-ultra-uncensored-heretic-v2-GGUF": {
+      "author": "llmfan46",
+      "repo_name": "Qwen3.5-9B-ultra-uncensored-heretic-v2-GGUF",
+      "repo_id": "llmfan46/Qwen3.5-9B-ultra-uncensored-heretic-v2-GGUF",
+      "mmproj_file": "Qwen3.5-9B-mmproj-BF16.gguf",
+      "model_files": [
+        "Qwen3.5-9B-ultra-uncensored-heretic-v2-Q4_K_M.gguf",
+        "Qwen3.5-9B-ultra-uncensored-heretic-v2-Q6_K.gguf",
+        "Qwen3.5-9B-ultra-uncensored-heretic-v2-Q8_0.gguf"
+      ],
+      "defaults": {
+        "context_length": 8192,
+        "image_max_tokens": 4096,
+        "n_batch": 512,
+        "gpu_layers": -1,
+        "top_k": 0,
+        "pool_size": 4194304
+      }
     }
   }
 }
