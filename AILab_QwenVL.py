@@ -910,7 +910,7 @@ class AILab_QwenVL(QwenVLBase):
     RETURN_TYPES = ("STRING",)
     RETURN_NAMES = ("RESPONSE",)
     FUNCTION = "process"
-    CATEGORY = "🧪AILab/QwenVL"
+    CATEGORY = "QwenVL-f"
 
     def process(self, model_name, quantization, preset_prompt, custom_prompt, attention_mode, max_tokens, enable_thinking, keep_model_loaded, seed, image=None, video=None):
         return self.run(model_name, quantization, preset_prompt, custom_prompt, image, video, 16, max_tokens, 0.6, 0.9, 1, 1.2, seed, keep_model_loaded, attention_mode, False, "auto", enable_thinking=enable_thinking)
@@ -957,7 +957,7 @@ class AILab_QwenVL_Advanced(QwenVLBase):
     RETURN_TYPES = ("STRING",)
     RETURN_NAMES = ("RESPONSE",)
     FUNCTION = "process"
-    CATEGORY = "🧪AILab/QwenVL"
+    CATEGORY = "QwenVL-f"
 
     def process(self, model_name, quantization, attention_mode, use_torch_compile, device, preset_prompt, custom_prompt, max_tokens, temperature, top_p, num_beams, repetition_penalty, frame_count, enable_thinking, stop_words, keep_model_loaded, seed, image=None, video=None):
         parsed = [w.strip() for w in stop_words.split(",") if w.strip()] if stop_words else None

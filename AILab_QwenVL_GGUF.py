@@ -312,9 +312,9 @@ def _resolve_model_entry(model_name: str) -> GGUFVLResolved:
             model_filename=local_path.name,
             mmproj_filename=mmproj,
             context_length=8192,
-            image_max_tokens=4096,
+            image_max_tokens=8192,
             image_min_tokens=1024,
-            n_batch=512,
+            n_batch=8192,
             gpu_layers=-1,
             top_k=0,
             pool_size=4194304,
@@ -359,9 +359,9 @@ def _resolve_model_entry(model_name: str) -> GGUFVLResolved:
         model_filename=str(model_filename),
         mmproj_filename=str(mmproj_filename) if mmproj_filename else None,
         context_length=_int("context_length", 8192),
-        image_max_tokens=_int("image_max_tokens", 4096),
+        image_max_tokens=_int("image_max_tokens", 8192),
         image_min_tokens=_int("image_min_tokens", 1024),
-        n_batch=_int("n_batch", 512),
+        n_batch=_int("n_batch", 8192),
         gpu_layers=_int("gpu_layers", -1),
         top_k=_int("top_k", 0),
         pool_size=_int("pool_size", 4194304),
@@ -699,7 +699,7 @@ class AILab_QwenVL_GGUF(QwenVLGGUFBase):
     RETURN_TYPES = ("STRING",)
     RETURN_NAMES = ("RESPONSE",)
     FUNCTION = "process"
-    CATEGORY = "🧪AILab/QwenVL"
+    CATEGORY = "QwenVL-f"
 
     def process(
         self,
@@ -767,9 +767,9 @@ class AILab_QwenVL_GGUF_Advanced(QwenVLGGUFBase):
                 "repetition_penalty": ("FLOAT", {"default": 1.2, "min": 0.5, "max": 2.0}),
                 "frame_count": ("INT", {"default": 16, "min": 1, "max": 64}),
                 "ctx": ("INT", {"default": 8192, "min": 1024, "max": 262144, "step": 512}),
-                "n_batch": ("INT", {"default": 512, "min": 64, "max": 32768, "step": 64}),
+                "n_batch": ("INT", {"default": 8192, "min": 64, "max": 32768, "step": 64}),
                 "gpu_layers": ("INT", {"default": -1, "min": -1, "max": 200}),
-                "image_max_tokens": ("INT", {"default": 4096, "min": 256, "max": 1024000, "step": 256}),
+                "image_max_tokens": ("INT", {"default": 8192, "min": 256, "max": 1024000, "step": 256}),
                 "image_min_tokens": ("INT", {"default": 1024, "min": 64, "max": 1024000, "step": 64}),
                 "top_k": ("INT", {"default": 0, "min": 0, "max": 32768}),
                 "pool_size": ("INT", {"default": 4194304, "min": 1048576, "max": 10485760, "step": 524288}),
@@ -787,7 +787,7 @@ class AILab_QwenVL_GGUF_Advanced(QwenVLGGUFBase):
     RETURN_TYPES = ("STRING",)
     RETURN_NAMES = ("RESPONSE",)
     FUNCTION = "process"
-    CATEGORY = "🧪AILab/QwenVL"
+    CATEGORY = "QwenVL-f"
 
     def process(
         self,
