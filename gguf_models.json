@@ -188,6 +188,23 @@
         "top_k": 0,
         "pool_size": 4194304
       }
+    },
+    "Huihui-Qwopus3.5-9B-v3-abliterated-GGUF": {
+      "author": "mradermacher",
+      "repo_name": "Huihui-Qwopus3.5-9B-v3-abliterated-GGUF",
+      "repo_id": "mradermacher/Huihui-Qwopus3.5-9B-v3-abliterated-GGUF",
+      "mmproj_file": "Huihui-Qwopus3.5-9B-v3-abliterated.mmproj-Q8_0.gguf",
+      "model_files": [
+        "Huihui-Qwopus3.5-9B-v3-abliterated.Q8_0.gguf"
+      ],
+      "defaults": {
+        "context_length": 8192,
+        "image_max_tokens": 4096,
+        "n_batch": 512,
+        "gpu_layers": -1,
+        "top_k": 0,
+        "pool_size": 4194304
+      }
     }
   }
 }
