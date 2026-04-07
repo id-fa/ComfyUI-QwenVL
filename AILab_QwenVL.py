@@ -17,6 +17,7 @@ import gc
 import json
 import os
 import platform
+import threading
 from enum import Enum
 from pathlib import Path
 
@@ -469,6 +470,9 @@ def _resolve_hf_base_dir() -> Path:
             return Path(paths[0]) / sub_path
     return Path(folder_paths.models_dir) / base_dir
 
+_downloading_files: set[str] = set()
+_download_lock = threading.Lock()
+
 def ensure_model(model_name):
     info = HF_ALL_MODELS.get(model_name)
     if not info:
@@ -480,18 +484,46 @@ def ensure_model(model_name):
     models_dir.mkdir(parents=True, exist_ok=True)
     target = models_dir / repo_id.split("/")[-1]
 
-    # ✅ If already downloaded (has weights), use local without calling snapshot_download
+    # If already downloaded (has weights), use local without calling snapshot_download
     if target.exists() and target.is_dir():
         if any(target.glob("*.safetensors")) or any(target.glob("*.bin")):
             return str(target)
 
-    snapshot_download(
-        repo_id=repo_id,
-        local_dir=str(target),
-        local_dir_use_symlinks=False,
-        ignore_patterns=["*.md", ".git*"],
-    )
-    return str(target)
+    # Download needed — start in background and notify user
+    key = str(target)
+    with _download_lock:
+        already_downloading = key in _downloading_files
+        if not already_downloading:
+            _downloading_files.add(key)
+
+    if not already_downloading:
+        def _bg():
+            try:
+                snapshot_download(
+                    repo_id=repo_id,
+                    local_dir=str(target),
+                    local_dir_use_symlinks=False,
+                    ignore_patterns=["*.md", ".git*"],
+                )
+            except Exception as exc:
+                print(f"[QwenVL] Background download failed: {exc}")
+                print("[QwenVL] Download flag has been auto-cleared. Re-run to retry. / ダウンロードフラグは自動解除されました。再実行で再試行します。")
+                print("[QwenVL] Please check your network connection and available storage. / ネットワーク接続やストレージ空き容量を確認してください。")
+            finally:
+                with _download_lock:
+                    _downloading_files.discard(key)
+        threading.Thread(target=_bg, daemon=True).start()
+        raise RuntimeError(
+            f"[QwenVL] Model download started / モデルのダウンロードを開始しました: {repo_id}\n"
+            "Please re-run after download completes. Check console for progress.\n"
+            "ダウンロード完了後に再実行してください。進捗はコンソールで確認できます。"
+        )
+    else:
+        raise RuntimeError(
+            f"[QwenVL] Model is downloading / モデルをダウンロード中です: {repo_id}\n"
+            "Please re-run after download completes. Check console for progress.\n"
+            "ダウンロード完了後に再実行してください。進捗はコンソールで確認できます。"
+        )
 
 def enforce_memory(model_name, quantization, device_info):
     info = HF_ALL_MODELS.get(model_name, {})

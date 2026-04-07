@@ -15,6 +15,7 @@ import io
 import inspect
 import json
 import os
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -325,6 +326,22 @@ def _download_single_file(repo_ids: list[str], filename: str, target_path: Path)
         raise FileNotFoundError(f"[QwenVL] File not found after download: {target_path}")
 
 
+_downloading_files: set[str] = set()
+_download_lock = threading.Lock()
+
+
+def _background_download(repo_ids: list[str], filename: str, target_path: Path):
+    try:
+        _download_single_file(repo_ids, filename, target_path)
+    except Exception as exc:
+        print(f"[QwenVL] Background download failed: {exc}")
+        print("[QwenVL] Download flag has been auto-cleared. Re-run to retry. / ダウンロードフラグは自動解除されました。再実行で再試行します。")
+        print("[QwenVL] Please check your network connection and available storage. / ネットワーク接続やストレージ空き容量を確認してください。")
+    finally:
+        with _download_lock:
+            _downloading_files.discard(str(target_path))
+
+
 def _resolve_model_entry(model_name: str) -> GGUFVLResolved:
     # --- Local file ---
     if model_name.startswith(LOCAL_PREFIX):
@@ -472,15 +489,42 @@ class QwenVLGGUFBase:
                 repo_ids.append(resolved.repo_id)
             repo_ids.extend(resolved.alt_repo_ids)
 
+            needs_download = []
             if not model_path.exists():
                 if not repo_ids:
                     raise FileNotFoundError(f"[QwenVL] GGUF model not found locally and no repo_id provided: {model_path}")
-                _download_single_file(repo_ids, resolved.model_filename, model_path)
-
+                needs_download.append((repo_ids, resolved.model_filename, model_path))
             if mmproj_path is not None and not mmproj_path.exists():
                 if not repo_ids:
                     raise FileNotFoundError(f"[QwenVL] mmproj not found locally and no repo_id provided: {mmproj_path}")
-                _download_single_file(repo_ids, resolved.mmproj_filename, mmproj_path)
+                needs_download.append((repo_ids, resolved.mmproj_filename, mmproj_path))
+
+            if needs_download:
+                started = []
+                with _download_lock:
+                    for repos, filename, path in needs_download:
+                        key = str(path)
+                        if key not in _downloading_files:
+                            _downloading_files.add(key)
+                            started.append((repos, filename, path))
+
+                for repos, filename, path in started:
+                    t = threading.Thread(target=_background_download, args=(repos, filename, path), daemon=True)
+                    t.start()
+
+                all_files = ", ".join(f for _, f, _ in needs_download)
+                if started:
+                    raise RuntimeError(
+                        f"[QwenVL] Model download started / モデルのダウンロードを開始しました: {all_files}\n"
+                        "Please re-run after download completes. Check console for progress.\n"
+                        "ダウンロード完了後に再実行してください。進捗はコンソールで確認できます。"
+                    )
+                else:
+                    raise RuntimeError(
+                        f"[QwenVL] Model is downloading / モデルをダウンロード中です: {all_files}\n"
+                        "Please re-run after download completes. Check console for progress.\n"
+                        "ダウンロード完了後に再実行してください。進捗はコンソールで確認できます。"
+                    )
 
         device_kind = _pick_device(device)
 
