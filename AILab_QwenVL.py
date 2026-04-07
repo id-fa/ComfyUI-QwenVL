@@ -785,10 +785,13 @@ class QwenVLBase:
         repetition_penalty,
         enable_thinking=None,
         stop_words=None,
+        image2=None,
+        image3=None,
     ):
         conversation = [{"role": "user", "content": []}]
-        if image is not None:
-            conversation[0]["content"].append({"type": "image", "image": self.tensor_to_pil(image)})
+        for img_tensor in (image, image2, image3):
+            if img_tensor is not None:
+                conversation[0]["content"].append({"type": "image", "image": self.tensor_to_pil(img_tensor)})
         if video is not None:
             frames = [self.tensor_to_pil(frame) for frame in video]
             if len(frames) > frame_count:
@@ -837,7 +840,7 @@ class QwenVLBase:
         text = clean_model_output(text, OutputCleanConfig(mode="text", strip_think=True))
         return text.strip()
 
-    def run(self, model_name, quantization, preset_prompt, custom_prompt, image, video, frame_count, max_tokens, temperature, top_p, num_beams, repetition_penalty, seed, keep_model_loaded, attention_mode, use_torch_compile, device, enable_thinking=None, stop_words=None):
+    def run(self, model_name, quantization, preset_prompt, custom_prompt, image, video, frame_count, max_tokens, temperature, top_p, num_beams, repetition_penalty, seed, keep_model_loaded, attention_mode, use_torch_compile, device, enable_thinking=None, stop_words=None, image2=None, image3=None):
         # Create progress bar with 3 stages: setup, model loading, generation
         pbar = ProgressBar(3)
         
@@ -872,6 +875,8 @@ class QwenVLBase:
                 repetition_penalty,
                 enable_thinking=enable_thinking,
                 stop_words=stop_words,
+                image2=image2,
+                image3=image3,
             )
 
             pbar.update_absolute(3, 3, None)
@@ -950,6 +955,8 @@ class AILab_QwenVL_Advanced(QwenVLBase):
             },
             "optional": {
                 "image": ("IMAGE",),
+                "image2": ("IMAGE",),
+                "image3": ("IMAGE",),
                 "video": ("IMAGE",),
             },
         }
@@ -959,9 +966,9 @@ class AILab_QwenVL_Advanced(QwenVLBase):
     FUNCTION = "process"
     CATEGORY = "QwenVL-F"
 
-    def process(self, model_name, quantization, attention_mode, use_torch_compile, device, preset_prompt, custom_prompt, max_tokens, temperature, top_p, num_beams, repetition_penalty, frame_count, enable_thinking, stop_words, keep_model_loaded, seed, image=None, video=None):
+    def process(self, model_name, quantization, attention_mode, use_torch_compile, device, preset_prompt, custom_prompt, max_tokens, temperature, top_p, num_beams, repetition_penalty, frame_count, enable_thinking, stop_words, keep_model_loaded, seed, image=None, image2=None, image3=None, video=None):
         parsed = [w.strip() for w in stop_words.split(",") if w.strip()] if stop_words else None
-        return self.run(model_name, quantization, preset_prompt, custom_prompt, image, video, frame_count, max_tokens, temperature, top_p, num_beams, repetition_penalty, seed, keep_model_loaded, attention_mode, use_torch_compile, device, enable_thinking=enable_thinking, stop_words=parsed)
+        return self.run(model_name, quantization, preset_prompt, custom_prompt, image, video, frame_count, max_tokens, temperature, top_p, num_beams, repetition_penalty, seed, keep_model_loaded, attention_mode, use_torch_compile, device, enable_thinking=enable_thinking, stop_words=parsed, image2=image2, image3=image3)
 
 NODE_CLASS_MAPPINGS = {
     "QwenVL-F": AILab_QwenVL,

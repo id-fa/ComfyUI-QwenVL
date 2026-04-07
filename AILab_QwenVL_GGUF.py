@@ -218,16 +218,50 @@ def _filter_kwargs_for_callable(fn, kwargs: dict) -> dict:
     return {k: v for k, v in kwargs.items() if k in allowed}
 
 
-def _tensor_to_base64_png(tensor) -> str | None:
+import math
+
+
+def _estimate_image_tokens(width: int, height: int) -> int:
+    """Estimate Qwen2VL image tokens: ceil(H/28) * ceil(W/28)."""
+    return math.ceil(height / 28) * math.ceil(width / 28)
+
+
+def _resize_image_to_token_budget(pil_img: Image.Image, max_tokens: int) -> Image.Image:
+    """Shrink image so its estimated token count fits within *max_tokens*."""
+    w, h = pil_img.size
+    cur_tokens = _estimate_image_tokens(w, h)
+    if cur_tokens <= max_tokens:
+        return pil_img
+    scale = math.sqrt(max_tokens / cur_tokens)
+    new_w = max(int(w * scale) // 28 * 28, 28)
+    new_h = max(int(h * scale) // 28 * 28, 28)
+    print(f"[QwenVL] Auto-resizing image from {w}x{h} ({cur_tokens} tokens) "
+          f"to {new_w}x{new_h} ({_estimate_image_tokens(new_w, new_h)} tokens) to fit ctx budget")
+    return pil_img.resize((new_w, new_h), Image.LANCZOS)
+
+
+def _tensor_to_pil(tensor) -> Image.Image | None:
+    """Convert a ComfyUI IMAGE tensor to a PIL Image."""
     if tensor is None:
         return None
     if tensor.ndim == 4:
         tensor = tensor[0]
     array = (tensor * 255).clamp(0, 255).to(torch.uint8).cpu().numpy()
-    pil_img = Image.fromarray(array, mode="RGB")
+    return Image.fromarray(array, mode="RGB")
+
+
+def _pil_to_base64_png(pil_img: Image.Image) -> str:
+    """Encode a PIL Image as base64 PNG string."""
     buf = io.BytesIO()
     pil_img.save(buf, format="PNG")
     return base64.b64encode(buf.getvalue()).decode("utf-8")
+
+
+def _tensor_to_base64_png(tensor) -> str | None:
+    pil_img = _tensor_to_pil(tensor)
+    if pil_img is None:
+        return None
+    return _pil_to_base64_png(pil_img)
 
 
 def _sample_video_frames(video, frame_count: int):
@@ -622,6 +656,8 @@ class QwenVLGGUFBase:
         pool_size: int | None,
         enable_thinking: bool = False,
         stop_words: list[str] | None = None,
+        image2=None,
+        image3=None,
     ):
         torch.manual_seed(int(seed))
 
@@ -632,16 +668,30 @@ class QwenVLGGUFBase:
         think_prefix = "/think" if enable_thinking else "/no_think"
         prompt = f"{think_prefix}\n{prompt}"
 
-        images_b64: list[str] = []
-        if image is not None:
-            img = _tensor_to_base64_png(image)
-            if img:
-                images_b64.append(img)
+        # Collect all PIL images first (static images + video frames)
+        pil_images: list[Image.Image] = []
+        for img_tensor in (image, image2, image3):
+            pil = _tensor_to_pil(img_tensor)
+            if pil is not None:
+                pil_images.append(pil)
         if video is not None:
             for frame in _sample_video_frames(video, int(frame_count)):
-                img = _tensor_to_base64_png(frame)
-                if img:
-                    images_b64.append(img)
+                pil = _tensor_to_pil(frame)
+                if pil is not None:
+                    pil_images.append(pil)
+
+        # Auto-resize images to fit within ctx budget (prevent MROPE seq_add crash)
+        if pil_images and ctx is not None:
+            text_token_overhead = 256  # system prompt + user prompt + formatting
+            token_budget_for_images = max(ctx - max_tokens - text_token_overhead, 0)
+            if token_budget_for_images == 0:
+                print(f"[QwenVL] Warning: ctx={ctx} is too small for max_tokens={max_tokens}; images may cause a crash")
+            else:
+                per_image_budget = token_budget_for_images // len(pil_images)
+                effective_cap = min(per_image_budget, image_max_tokens or per_image_budget)
+                pil_images = [_resize_image_to_token_budget(img, effective_cap) for img in pil_images]
+
+        images_b64: list[str] = [_pil_to_base64_png(img) for img in pil_images]
 
         try:
             self._load_model(
@@ -773,7 +823,7 @@ class AILab_QwenVL_GGUF_Advanced(QwenVLGGUFBase):
                 "top_p": ("FLOAT", {"default": 0.9, "min": 0.0, "max": 1.0}),
                 "repetition_penalty": ("FLOAT", {"default": 1.2, "min": 0.5, "max": 2.0}),
                 "frame_count": ("INT", {"default": 16, "min": 1, "max": 64}),
-                "ctx": ("INT", {"default": 8192, "min": 1024, "max": 262144, "step": 512}),
+                "ctx": ("INT", {"default": 32768, "min": 1024, "max": 262144, "step": 512}),
                 "n_batch": ("INT", {"default": 8192, "min": 64, "max": 32768, "step": 64}),
                 "gpu_layers": ("INT", {"default": -1, "min": -1, "max": 200}),
                 "image_max_tokens": ("INT", {"default": 8192, "min": 256, "max": 1024000, "step": 256}),
@@ -787,6 +837,8 @@ class AILab_QwenVL_GGUF_Advanced(QwenVLGGUFBase):
             },
             "optional": {
                 "image": ("IMAGE",),
+                "image2": ("IMAGE",),
+                "image3": ("IMAGE",),
                 "video": ("IMAGE",),
             },
         }
@@ -819,6 +871,8 @@ class AILab_QwenVL_GGUF_Advanced(QwenVLGGUFBase):
         keep_model_loaded,
         seed,
         image=None,
+        image2=None,
+        image3=None,
         video=None,
     ):
         parsed = [w.strip() for w in stop_words.split(",") if w.strip()] if stop_words else None
@@ -845,6 +899,8 @@ class AILab_QwenVL_GGUF_Advanced(QwenVLGGUFBase):
             pool_size=pool_size,
             enable_thinking=enable_thinking,
             stop_words=parsed,
+            image2=image2,
+            image3=image3,
         )
 
 

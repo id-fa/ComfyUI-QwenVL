@@ -27,10 +27,12 @@ No test suite or linter is configured. Publishing to the ComfyUI registry is han
 **Transformers backend** (`AILab_QwenVL.py`):
 - `QwenVLBase` — base class handling model download (`ensure_model` via `snapshot_download`), loading (`load_model`), device/VRAM management, quantization (4-bit/8-bit/FP16 via BitsAndBytes), and attention backend selection.
 - `AILab_QwenVL` (simple) and `AILab_QwenVL_Advanced` (full control) inherit from it.
+- Advancedノードは `image`, `image2`, `image3` の3つのoptional画像入力を持ち、複数画像の同時参照が可能。Simpleノードは `image` のみ。
 
 **GGUF backend** (`AILab_QwenVL_GGUF.py`):
 - `QwenVLGGUFBase` — base class for llama-cpp-python models with output cleaning.
 - `AILab_QwenVL_GGUF` and `AILab_QwenVL_GGUF_Advanced` inherit from it.
+- Advancedノードは `image`, `image2`, `image3` の3つのoptional画像入力を持ち、複数画像の同時参照が可能。Simpleノードは `image` のみ。
 
 **Prompt enhancers** (text-only, no vision):
 - `AILab_QwenVL_PromptEnhancer.py` — Transformers-based
@@ -69,7 +71,7 @@ HF・GGUF両バックエンドで `base_dir` と `extra_model_paths.yaml` の両
 - **VLノード** (`AILab_QwenVL_GGUF.py`): モジュール読み込み時に `_scan_local_gguf_files()` → `LOCAL_GGUF_FILES` にキャッシュ。`_resolve_model_entry()` と `_load_model()` で `LOCAL_PREFIX` 判定して直接パスを使用。同ディレクトリの `*mmproj*.gguf`（中間一致）を自動検出してVision対応。
 - **PromptEnhancer** (`AILab_QwenVL_GGUF_PromptEnhancer.py`): `INPUT_TYPES` 呼び出し時に `_scan_local_gguf_files(catalog)` でスキャン。`_resolve_model_path()` で `LOCAL_PREFIX` 判定して直接パスを返却。mmproj不要（テキスト専用）。
 - **カタログ未登録フォールバック**: APIから `[local]` プレフィクスなしのモデル名が渡され、カタログにも該当がない場合、自動的に `[local] {model_name}` で `LOCAL_GGUF_FILES` を再検索する。VLノード側は `_resolve_model_entry()` 内で再帰呼び出し、PromptEnhancer側は `_resolve_model_path()` 内でローカルスキャン結果を照合する。`_load_model()` のローカルファイル判定は `resolved.repo_id is None` で行う。
-- ローカルファイルは `repo_id=None` のためダウンロード処理はスキップされる。パラメータのデフォルト値（ctx=8192, gpu_layers=-1 等）はAdvancedノードのUIで上書き可能。
+- ローカルファイルは `repo_id=None` のためダウンロード処理はスキップされる。パラメータのデフォルト値（ctx=32768, gpu_layers=-1 等）はAdvancedノードのUIで上書き可能。
 
 ### Configuration Files
 
@@ -83,9 +85,18 @@ HF・GGUF両バックエンドで `base_dir` と `extra_model_paths.yaml` の両
 `max_tokens` の上限値は全ノード（Simple/Advanced × HF/GGUF）で **32,768** に設定。Qwen3.5 の推奨 max_new_tokens（標準タスク 32K、複雑タスク 80K）に基づく。Thinkingモデルでは `<think>思考</think>回答` の全体がこの予算内で生成されるため、低い値では思考部分で打ち切られる。
 
 GGUF側のデフォルト値:
+- `ctx`: 32768（画像トークン + テキスト + 生成出力を収容するため。テキスト専用なら8192でも可）
 - `n_batch`: 8192（`image_max_tokens` 以上が必要な制約あり）
 - `image_max_tokens`: 8192（高解像度画像対応）
 - `image_min_tokens`: 1024（グラウンディング/OCRタスクの最低推奨値）
+
+### 画像自動リサイズ（GGUF側）
+
+GGUF側の `run()` で、入力画像のトークン数が `ctx` 予算を超える場合に自動縮小する仕組みを持つ。Qwen2VLのMROPE（n_pos_per_embd=3）ではKVキャッシュの `seq_add` がサポートされないため、コンテキストシフトが発生するとプロセスが強制終了する。これを防ぐためのガード。
+
+- **トークン推定**: `_estimate_image_tokens(w, h)` = `ceil(H/28) * ceil(W/28)`（14pxパッチ × 2x2マージ）
+- **予算計算**: `ctx - max_tokens - テキストオーバーヘッド(256)` を画像枚数で均等分割し、`image_max_tokens` とのmin値を各画像の上限とする
+- **リサイズ**: `_resize_image_to_token_budget()` が28px単位にアラインしつつLANCZOS縮小。リサイズ時はコンソールにログ出力
 
 ### Thinking モード制御
 
