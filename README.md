@@ -1,3 +1,21 @@
+# **QwenVL for ComfyUI (Fork)**
+
+This is a fork of [1038lab/ComfyUI-QwenVL](https://github.com/1038lab/ComfyUI-QwenVL) with the following additions:
+
+## **Fork Changes**
+
+- **Local model file loading**: Load `.gguf` files directly from your local disk without catalog registration. Files found under `base_dir` are listed as `[local] relative/path` in the model dropdown.
+- **Multiple image reference support**: Advanced nodes (HF / GGUF) accept up to 3 image inputs (`image`, `image2`, `image3`) for simultaneous multi-image analysis.
+- **Thinking mode toggle**: `enable_thinking` switch on all nodes (Simple / Advanced, HF / GGUF). Enables the `<think>...</think>` reasoning mode for Qwen3-VL Thinking models; disabled by default.
+
+![QwenVL-F_GGUF_Advanced](example_workflows/mod1_adv.png)
+
+---
+
+*Below is the original README from the upstream repository.*
+
+---
+
 # **QwenVL for ComfyUI**
 
 The ComfyUI-QwenVL custom node integrates the powerful Qwen-VL series of vision-language models (LVLMs) from Alibaba Cloud, including the latest Qwen3-VL and Qwen2.5-VL, plus GGUF backends and text-only Qwen3 support. This advanced node enables seamless multimodal AI capabilities within your ComfyUI workflows, allowing for efficient text generation, image understanding, and video analysis.
