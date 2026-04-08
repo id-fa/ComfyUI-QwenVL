@@ -254,8 +254,11 @@ def _tensor_to_pil(tensor) -> Image.Image | None:
 def _pil_to_base64_png(pil_img: Image.Image) -> str:
     """Encode a PIL Image as base64 PNG string."""
     buf = io.BytesIO()
-    pil_img.save(buf, format="PNG")
-    return base64.b64encode(buf.getvalue()).decode("utf-8")
+    try:
+        pil_img.save(buf, format="PNG")
+        return base64.b64encode(buf.getvalue()).decode("utf-8")
+    finally:
+        buf.close()
 
 
 def _tensor_to_base64_png(tensor) -> str | None:
@@ -616,7 +619,11 @@ class QwenVLGGUFBase:
             )
         if device_kind == "cuda" and n_gpu_layers == 0:
             print("[QwenVL] Warning: device=cuda selected but n_gpu_layers=0; model will run on CPU.")
-        self.llm = Llama(**llm_kwargs_filtered)
+        try:
+            self.llm = Llama(**llm_kwargs_filtered)
+        except Exception:
+            self.chat_handler = None
+            raise
         self.current_signature = signature
 
     def _invoke(
@@ -736,6 +743,7 @@ class QwenVLGGUFBase:
                 pil_images = [_resize_image_to_token_budget(img, effective_cap) for img in pil_images]
 
         images_b64: list[str] = [_pil_to_base64_png(img) for img in pil_images]
+        del pil_images
 
         try:
             self._load_model(

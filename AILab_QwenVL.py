@@ -869,6 +869,7 @@ class QwenVLBase:
             torch.cuda.synchronize()
         input_len = model_inputs["input_ids"].shape[-1]
         text = self.tokenizer.decode(outputs[0, input_len:], skip_special_tokens=True)
+        del processed, model_inputs, outputs
         text = clean_model_output(text, OutputCleanConfig(mode="text", strip_think=True))
         return text.strip()
 

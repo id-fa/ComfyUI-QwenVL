@@ -45,7 +45,12 @@ No test suite or linter is configured. Publishing to the ComfyUI registry is han
 ### Key Subsystems
 
 - **Attention resolution**: `resolve_attention_mode()` auto-selects SageAttention → Flash-Attn → SDPA with GPU architecture-aware kernel selection (`set_sage_attention`, `get_sage_attention_config`).
-- **Memory management**: `enforce_memory()` auto-downgrades quantization if VRAM is insufficient; `clear()` releases models and clears CUDA cache.
+- **Memory management**: `enforce_memory()` auto-downgrades quantization if VRAM is insufficient; `clear()` releases models and clears CUDA cache。各バックエンドでメモリリーク対策を実施済み：
+  - **中間テンソル解放**: HF側 `generate()` と `_invoke_text()` で `processed`, `model_inputs`, `outputs`, `inputs` を使用後に `del`。
+  - **PIL/BytesIO解放**: GGUF側 `_pil_to_base64_png()` で BytesIO を `finally` で close。`run()` で `pil_images` をエンコード後に `del`。
+  - **モデルパス切替時の解放**: HF PromptEnhancer の `process()` で textモデル⇔QwenVLパス切替時に他方のモデルを解放。`_load_text_model()` でモデル入替時に `gc.collect()` / `empty_cache()` を実行。
+  - **GGUF例外安全**: `_load_model()` で Llama 初期化失敗時に `chat_handler` をクリーンアップ。
+  - **GGUF PromptEnhancer**: `clear()` に `gc.collect()` / `torch.cuda.empty_cache()` を追加（VLベースクラスと同等）。
 - **Device handling**: `get_device_info()` detects CUDA/MPS/CPU; `normalize_device_choice()` validates device strings.
 - **バックグラウンドダウンロード**: HF・GGUF両バックエンドで、モデル未ダウンロード時はバックグラウンドスレッドでダウンロードを開始し、即座にエラーをraiseしてユーザーに通知する。モジュールレベルの `_downloading_files` (set) と `_download_lock` でダウンロード中の重複実行を防止。ダウンロード完了/失敗時にフラグは自動解除される。ローカルファイル（`[local]`プレフィクス）はダウンロード不要のためスキップ。
 

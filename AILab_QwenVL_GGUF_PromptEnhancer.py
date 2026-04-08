@@ -10,6 +10,7 @@
 #
 # Source: https://github.com/1038lab/ComfyUI-QwenVL
 
+import gc
 import json
 import os
 import re
@@ -211,6 +212,9 @@ class AILab_QwenVL_GGUF_PromptEnhancer:
     def clear(self):
         self.llm = None
         self.current_signature = None
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
     def _resolve_model_path(self, model_name):
         if model_name.startswith(LOCAL_PREFIX):

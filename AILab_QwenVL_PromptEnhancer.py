@@ -4,6 +4,7 @@
 #
 # Source: https://github.com/1038lab/ComfyUI-QwenVL
 
+import gc
 import json
 from pathlib import Path
 
@@ -120,6 +121,9 @@ class AILab_QwenVL_PromptEnhancer(QwenVLBase):
         user_prompt = prompt_text.strip() or "Describe a scene vividly."
         merged_prompt = f"{base_instruction}\n\n{user_prompt}".strip()
         if model_name in HF_TEXT_MODELS:
+            # Release VL model if previously loaded (path switch: QwenVL → text)
+            if self.model is not None:
+                self.clear()
             enhanced = self._invoke_text(
                 model_name,
                 quantization,
@@ -133,6 +137,14 @@ class AILab_QwenVL_PromptEnhancer(QwenVLBase):
                 seed,
             )
         else:
+            # Release text model if previously loaded (path switch: text → QwenVL)
+            if self.text_model is not None:
+                self.text_model = None
+                self.text_tokenizer = None
+                self.text_signature = None
+                gc.collect()
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
             enhanced = self._invoke_qwen(
                 model_name,
                 quantization,
@@ -215,6 +227,9 @@ class AILab_QwenVL_PromptEnhancer(QwenVLBase):
         self.text_model = None
         self.text_tokenizer = None
         self.text_signature = None
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
         load_kwargs = {}
         if quant_cfg:
@@ -263,6 +278,7 @@ class AILab_QwenVL_PromptEnhancer(QwenVLBase):
         decoded = self.text_tokenizer.decode(outputs[0], skip_special_tokens=True)
         prefix = self.text_tokenizer.decode(inputs["input_ids"][0], skip_special_tokens=True)
         result = decoded[len(prefix) :].strip()
+        del inputs, outputs
 
         if not keep_model_loaded:
             self.text_model = None
