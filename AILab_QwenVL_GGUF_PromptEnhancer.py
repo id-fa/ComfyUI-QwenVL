@@ -203,6 +203,7 @@ class AILab_QwenVL_GGUF_PromptEnhancer:
                 "repetition_penalty": ("FLOAT", {"default": 1.1, "min": 0.5, "max": 2.0}),
                 "english_output": ("BOOLEAN", {"default": False, "tooltip": "Force final output in English using translation prompt."}),
                 "device": (["auto", "cuda", "cpu", "mps"], {"default": "auto", "tooltip": "Select device; auto prefers GPU when available."}),
+                "keep_model_loaded": ("BOOLEAN", {"default": True, "tooltip": "Keep the model in memory after execution. Disable to free VRAM."}),
                 "seed": ("INT", {"default": 1, "min": 1, "max": 2**32 - 1}),
             }
         }
@@ -421,6 +422,7 @@ class AILab_QwenVL_GGUF_PromptEnhancer:
         repetition_penalty,
         english_output,
         device,
+        keep_model_loaded,
         seed,
     ):
         style_entry = self.styles.get(preset_system_prompt, {})
@@ -461,6 +463,8 @@ class AILab_QwenVL_GGUF_PromptEnhancer:
             final = clean_model_output(translated, OutputCleanConfig(mode="prompt")) or translated.strip()
         else:
             final = clean_model_output(enhanced, OutputCleanConfig(mode="prompt")) or enhanced.strip()
+        if not keep_model_loaded:
+            self.clear()
         return (final,)
 
     @staticmethod

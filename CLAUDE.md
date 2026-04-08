@@ -35,8 +35,8 @@ No test suite or linter is configured. Publishing to the ComfyUI registry is han
 - Advancedノードは `image`, `image2`, `image3` の3つのoptional画像入力を持ち、複数画像の同時参照が可能。Simpleノードは `image` のみ。
 
 **Prompt enhancers** (text-only, no vision):
-- `AILab_QwenVL_PromptEnhancer.py` — Transformers-based
-- `AILab_QwenVL_GGUF_PromptEnhancer.py` — GGUF-based
+- `AILab_QwenVL_PromptEnhancer.py` — Transformers-based。`keep_model_loaded` スイッチあり（HF text model用の `_invoke_text` パスと、VLモデル流用の `_invoke_qwen` パスの両方でアンロード対応）。
+- `AILab_QwenVL_GGUF_PromptEnhancer.py` — GGUF-based。`keep_model_loaded` スイッチあり（`process()` 完了後に `self.clear()` でアンロード）。
 
 **Output cleaning** (`AILab_OutputCleaner.py`):
 - `OutputCleanConfig` dataclass and utilities to strip thinking tags and leaked tokens from model output.
