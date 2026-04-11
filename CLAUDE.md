@@ -33,10 +33,11 @@ No test suite or linter is configured. Publishing to the ComfyUI registry is han
 - `QwenVLGGUFBase` — base class for llama-cpp-python models with output cleaning.
 - `AILab_QwenVL_GGUF` and `AILab_QwenVL_GGUF_Advanced` inherit from it.
 - Advancedノードは `image`, `image2`, `image3` の3つのoptional画像入力を持ち、複数画像の同時参照が可能。Simpleノードは `image` のみ。
+- **Chat handler自動選択**: モデル名（ファイル名または `[local] ...` キー）に `gemma` が含まれる場合は `Gemma4ChatHandler` を使用（JamePeng fork v0.3.35+ 必須）。それ以外は `Qwen3VLChatHandler` → `Qwen25VLChatHandler` の順でフォールバック。判定は `_is_gemma_model_name()` によるファイル名部分一致。
 
 **Prompt enhancers** (text-only, no vision):
 - `AILab_QwenVL_PromptEnhancer.py` — Transformers-based。`keep_model_loaded` スイッチあり（HF text model用の `_invoke_text` パスと、VLモデル流用の `_invoke_qwen` パスの両方でアンロード対応）。
-- `AILab_QwenVL_GGUF_PromptEnhancer.py` — GGUF-based。`keep_model_loaded` スイッチあり（`process()` 完了後に `self.clear()` でアンロード）。
+- `AILab_QwenVL_GGUF_PromptEnhancer.py` — GGUF-based。`keep_model_loaded` スイッチあり（`process()` 完了後に `self.clear()` でアンロード）。モデル名に `gemma` を含む場合は `chat_format="qwen"` を渡さず、GGUFに埋め込まれた chat template を llama_cpp に使わせる（それ以外は従来通り `chat_format="qwen"` を強制）。
 
 **Output cleaning** (`AILab_OutputCleaner.py`):
 - `OutputCleanConfig` dataclass and utilities to strip thinking tags and leaked tokens from model output.
@@ -98,7 +99,7 @@ GGUF側のデフォルト値:
 
 ### 画像自動リサイズ（GGUF側）
 
-GGUF側の `run()` で、入力画像のトークン数が `ctx` 予算を超える場合に自動縮小する仕組みを持つ。Qwen2VLのMROPE（n_pos_per_embd=3）ではKVキャッシュの `seq_add` がサポートされないため、コンテキストシフトが発生するとプロセスが強制終了する。これを防ぐためのガード。
+GGUF側の `run()` で、入力画像のトークン数が `ctx` 予算を超える場合に自動縮小する仕組みを持つ。Qwen2VLのMROPE（n_pos_per_embd=3）ではKVキャッシュの `seq_add` がサポートされないため、コンテキストシフトが発生するとプロセスが強制終了する。これを防ぐためのガード。**Gemma 4 はMROPEを使わないためこの自動リサイズをスキップする**（`is_gemma=True` の場合 `run()` 内で分岐）。
 
 - **トークン推定**: `_estimate_image_tokens(w, h)` = `ceil(H/28) * ceil(W/28)`（14pxパッチ × 2x2マージ）
 - **予算計算**: `ctx - max_tokens - テキストオーバーヘッド(256)` を画像枚数で均等分割し、`image_max_tokens` とのmin値を各画像の上限とする
@@ -113,18 +114,22 @@ GGUF側の `run()` で、入力画像のトークン数が `ctx` 予算を超え
 - `enable_thinking=None`（非Thinkingモデル）の場合は `chat_template_kwargs` 自体を送らず、テンプレート側のデフォルト動作に任せる。
 
 **GGUF側** (`AILab_QwenVL_GGUF.py`):
-- llama-cpp-python にはテンプレート制御フラグがないため、ユーザープロンプト先頭に `/think` または `/no_think` トークンを直接挿入する。
+- **Qwen系**: llama-cpp-python にはテンプレート制御フラグがないため、ユーザープロンプト先頭に `/think` または `/no_think` トークンを直接挿入する。ハンドラ init には `force_reasoning=False` を渡す。
+- **Gemma 4系**: プレフィックス注入はスキップし、`Gemma4ChatHandler` にも thinking 関連 kwargs を渡さない（`force_reasoning` / `enable_thinking` はフォーク側 v0.3.35 の実装で親クラスが `TypeError` を投げるため）。現状 `enable_thinking` トグルは Gemma 経路では無効。将来フォーク側が安定したkwarg名を公開したら追加予定。Gemma 4 のthinkingはフォーク側の仕様で 31B / 26BA4B バリアントのみ対応（E2B / E4B は非対応）。
+
+> **注意**: `Gemma4ChatHandler.__init__` は `**kwargs` を受け取り親クラスで runtime 検証するため、`inspect.signature` ベースの `_filter_kwargs_for_callable` ではフィルタできない。ハンドラ毎に必要最小限の kwargs だけ明示的に構築すること。
 
 **出力側**（共通）:
 - `AILab_OutputCleaner.py` の `clean_model_output()` が `<think>...</think>` ブロック、不完全な `<think>` / `</think>` タグを正規表現で除去する。
 - 閉じタグのない `<think>`（`max_tokens` 不足で途中打ち切り時に発生）は `<think>` 以降のテキストをすべて除去する。
+- **Gemma 4 チャンネル除去**: Gemma 4 は reasoning を `<|channel|>thought ... <|channel|>` で囲むため、`_GEMMA_CHANNEL_BLOCK_RE` でペアマッチしてブロックごと除去する。パイプの位置が揺れるレンダリング（`<|channel>`, `<channel|>`, `<|channel|>`）すべてにマッチ。ペア除去後に残った単独マーカーは、先頭にある場合は途中打ち切りの opener とみなして以降を全削除、そうでなければ closer とみなして最終マーカー以降のテキストを残す。`<|turn|>` / `<|start_of_turn|>` / `<|end_of_turn|>` 系リークトークンは `_GEMMA_TURN_TOKEN_RE` で個別に除去。
 
 ### Stop Words
 
 Advancedノード（HF/GGUF両方）に `stop_words` (STRING) ウィジェットがある。カンマ区切りで複数のストップシーケンスを指定可能。空欄ならデフォルト動作。
 
 - **HF側**: 各ストップワードをトークナイズし、末尾トークンIDを `eos_token_id` リストに追加。
-- **GGUF側**: `create_chat_completion` の `stop` リスト（デフォルト `["<|im_end|>", "<|im_start|>"]`）にそのまま文字列として追加。
+- **GGUF側**: `create_chat_completion` の `stop` リストにそのまま文字列として追加。デフォルト値はハンドラ別に切替: Qwen系は `["<|im_end|>", "<|im_start|>"]`、Gemma 4系は `["<|turn>", "<|channel>", "<end_of_turn>", "<start_of_turn>"]`。
 
 ### UI
 

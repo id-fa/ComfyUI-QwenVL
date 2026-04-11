@@ -205,6 +205,42 @@
         "top_k": 0,
         "pool_size": 4194304
       }
+    },
+    "gemma-4-E2B-it-GGUF": {
+      "handler": "gemma4",
+      "author": "unsloth",
+      "repo_name": "gemma-4-E2B-it-GGUF",
+      "repo_id": "unsloth/gemma-4-E2B-it-GGUF",
+      "mmproj_file": "mmproj-BF16.gguf",
+      "model_files": [
+        "gemma-4-E2B-it-Q8_0.gguf"
+      ],
+      "defaults": {
+        "context_length": 8192,
+        "image_max_tokens": 4096,
+        "n_batch": 512,
+        "gpu_layers": -1,
+        "top_k": 0,
+        "pool_size": 4194304
+      }
+    },
+    "gemma-4-E4B-it-heretic-ara-GGUF": {
+      "handler": "gemma4",
+      "author": "mradermacher",
+      "repo_name": "gemma-4-E4B-it-heretic-ara-GGUF",
+      "repo_id": "mradermacher/gemma-4-E4B-it-heretic-ara-GGUF",
+      "mmproj_file": "gemma-4-E4B-it-heretic-ara.mmproj-Q8_0.gguf",
+      "model_files": [
+        "gemma-4-E4B-it-heretic-ara.Q8_0.gguf"
+      ],
+      "defaults": {
+        "context_length": 8192,
+        "image_max_tokens": 4096,
+        "n_batch": 512,
+        "gpu_layers": -1,
+        "top_k": 0,
+        "pool_size": 4194304
+      }
     }
   }
 }

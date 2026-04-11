@@ -7,6 +7,7 @@ This is a fork of [1038lab/ComfyUI-QwenVL](https://github.com/1038lab/ComfyUI-Qw
 - **Local model file loading**: Load `.gguf` files directly from your local disk without catalog registration. Files found under `base_dir` are listed as `[local] relative/path` in the model dropdown.
 - **Multiple image reference support**: Advanced nodes (HF / GGUF) accept up to 3 image inputs (`image`, `image2`, `image3`) for simultaneous multi-image analysis.
 - **Thinking mode toggle**: `enable_thinking` switch on all nodes (Simple / Advanced, HF / GGUF). Enables the `<think>...</think>` reasoning mode for Qwen3-VL Thinking models; disabled by default.
+- **Gemma 4 GGUF support**: GGUF nodes auto-detect Gemma models by filename and switch to `Gemma4ChatHandler`, bypass the Qwen-specific `/think` prefix injection and MROPE image-resize guard, and strip Gemma's `<|channel|>` reasoning markers from the output. Requires the [JamePeng fork of llama-cpp-python v0.3.35+](https://github.com/JamePeng/llama-cpp-python/discussions/109). Qwen models continue to work unchanged.
 
 ![QwenVL-F_GGUF_Advanced](example_workflows/mod1_adv.png)
 

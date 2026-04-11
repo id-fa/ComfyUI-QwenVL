@@ -20,6 +20,18 @@ _CODE_FENCE_RE = re.compile(r"^\s*```[\w-]*\s*$", re.IGNORECASE)
 _THINK_BLOCK_RE = re.compile(r"<think[^>]*>.*?</think>", flags=re.IGNORECASE | re.DOTALL)
 _THINK_OPEN_RE = re.compile(r"<think[^>]*>", flags=re.IGNORECASE)
 _THINK_CLOSE_RE = re.compile(r"</think\s*>", flags=re.IGNORECASE)
+# Gemma 4 reasoning markers: <|channel|> (any combination of pipes) opens/closes
+# a thought channel. The emitted forms seen so far include <|channel>, <channel|>,
+# and <|channel|>. Paired blocks wrap the reasoning; lone markers appear on truncation.
+_GEMMA_CHANNEL_BLOCK_RE = re.compile(
+    r"<\|?channel\|?>.*?<\|?channel\|?>",
+    flags=re.IGNORECASE | re.DOTALL,
+)
+_GEMMA_CHANNEL_MARKER_RE = re.compile(r"<\|?channel\|?>", flags=re.IGNORECASE)
+_GEMMA_TURN_TOKEN_RE = re.compile(
+    r"<\|?(?:turn|start_of_turn|end_of_turn)\|?>",
+    flags=re.IGNORECASE,
+)
 _MARKER_RE = re.compile(
     r"(?im)^\s*(final|final answer|answer|output|result|prompt)\s*[:\-]\s*",
 )
@@ -55,9 +67,22 @@ def clean_model_output(text: str, config: OutputCleanConfig | None = None) -> st
             # Unclosed <think> — remove the tag and everything after it
             # (happens when max_tokens cuts off mid-thought)
             cleaned = _THINK_OPEN_RE.split(cleaned)[0]
+        # Gemma 4: drop paired <|channel|>...<|channel|> reasoning blocks, then handle
+        # any stray marker. If the first stray marker has no real content before it,
+        # treat it as a truncated/unclosed opener and discard everything; otherwise
+        # treat it as a closer and keep the text after the last marker.
+        cleaned = _GEMMA_CHANNEL_BLOCK_RE.sub("", cleaned)
+        stray = list(_GEMMA_CHANNEL_MARKER_RE.finditer(cleaned))
+        if stray:
+            before_first = cleaned[: stray[0].start()].strip()
+            if not before_first:
+                cleaned = ""
+            else:
+                cleaned = cleaned[stray[-1].end():]
         cleaned = cleaned.strip()
 
-    cleaned = _IM_TOKEN_RE.sub("", cleaned).strip()
+    cleaned = _IM_TOKEN_RE.sub("", cleaned)
+    cleaned = _GEMMA_TURN_TOKEN_RE.sub("", cleaned).strip()
 
     if cfg.strip_code_fences and "```" in cleaned:
         lines = [ln for ln in cleaned.splitlines() if not _CODE_FENCE_RE.match(ln)]

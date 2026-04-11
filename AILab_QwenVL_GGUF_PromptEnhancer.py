@@ -86,6 +86,11 @@ def _model_name_to_filename_candidates(model_name: str) -> set[str]:
 LOCAL_PREFIX = "[local] "
 
 
+def _is_gemma_model_name(name: str) -> bool:
+    """Detect Gemma models by filename substring (covers catalog keys and [local] paths)."""
+    return "gemma" in (name or "").lower()
+
+
 def _scan_local_gguf_files(catalog: dict) -> dict[str, Path]:
     """Scan base_dir for .gguf files not already in the given catalog."""
     base_dir = _resolve_base_dir(catalog.get("base_dir") or "LLM")
@@ -349,8 +354,11 @@ class AILab_QwenVL_GGUF_PromptEnhancer:
             "n_threads": None if threads == 0 else threads,
             "n_batch": 1024,
             "verbose": False,
-            "chat_format": "qwen",
         }
+        # Qwen text-only GGUFs need an explicit chat_format. Gemma ships its own
+        # chat template inside the GGUF, so let llama_cpp pick it up automatically.
+        if not _is_gemma_model_name(model_name):
+            kwargs["chat_format"] = "qwen"
         self.llm = Llama(**kwargs)
         self.current_signature = signature
 

@@ -11,5 +11,14 @@
 # 2) Then verify with:
 #    python -c "import llama_cpp; print(llama_cpp.__version__)"
 #
+# Supported chat handlers (auto-selected by model filename):
+#   - Qwen3VLChatHandler / Qwen25VLChatHandler  -> Qwen-VL GGUFs
+#   - Gemma4ChatHandler                         -> Gemma 4 GGUFs
+#
+# Gemma 4 support requires the JamePeng fork of llama-cpp-python v0.3.35 or later:
+#   https://github.com/JamePeng/llama-cpp-python/discussions/109
+# Earlier versions lack Gemma4ChatHandler; loading a Gemma GGUF will raise
+# ImportError from AILab_QwenVL_GGUF.py._load_model().
+#
 # Placeholder only; do not rely on this line alone:
 # llama-cpp-python

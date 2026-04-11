@@ -175,6 +175,11 @@ GGUF_VL_CATALOG = _load_gguf_vl_catalog()
 LOCAL_PREFIX = "[local] "
 
 
+def _is_gemma_model_name(name: str) -> bool:
+    """Detect Gemma models by filename substring (covers catalog keys and [local] paths)."""
+    return "gemma" in (name or "").lower()
+
+
 def _scan_local_gguf_files() -> dict[str, Path]:
     """Scan base_dir for .gguf files not already in the catalog."""
     base_dir = _resolve_base_dir(GGUF_VL_CATALOG.get("base_dir") or "LLM")
@@ -433,11 +438,13 @@ class QwenVLGGUFBase:
         self.llm = None
         self.chat_handler = None
         self.current_signature = None
+        self._is_gemma = False
 
     def clear(self):
         self.llm = None
         self.chat_handler = None
         self.current_signature = None
+        self._is_gemma = False
         gc.collect()
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
@@ -461,6 +468,7 @@ class QwenVLGGUFBase:
         image_min_tokens: int | None,
         top_k: int | None,
         pool_size: int | None,
+        enable_thinking: bool = False,
     ):
         self._load_backend()
 
@@ -545,6 +553,7 @@ class QwenVLGGUFBase:
         img_min = int(image_min_tokens) if image_min_tokens is not None else resolved.image_min_tokens
 
         has_mmproj = mmproj_path is not None and mmproj_path.exists()
+        is_gemma = _is_gemma_model_name(model_path.name) or _is_gemma_model_name(model_name)
 
         signature = (
             str(model_path),
@@ -567,26 +576,41 @@ class QwenVLGGUFBase:
         self.chat_handler = None
         if has_mmproj:
             handler_cls = None
-            try:
-                from llama_cpp.llama_chat_format import Qwen3VLChatHandler
-
-                handler_cls = Qwen3VLChatHandler
-            except ImportError:
+            if is_gemma:
                 try:
-                    from llama_cpp.llama_chat_format import Qwen25VLChatHandler
+                    from llama_cpp.llama_chat_format import Gemma4ChatHandler
 
-                    handler_cls = Qwen25VLChatHandler
+                    handler_cls = Gemma4ChatHandler
                 except ImportError:
                     raise RuntimeError(
-                        "[QwenVL] Missing Qwen VL chat handler in llama_cpp. Install the correct fork/wheel. See docs/GGUF_MANUAL_INSTALL.md"
+                        "[QwenVL] Gemma 4 requires llama-cpp-python v0.3.35+ with Gemma4ChatHandler "
+                        "(JamePeng fork). Update your llama_cpp install. See docs/GGUF_MANUAL_INSTALL.md"
                     )
+            else:
+                try:
+                    from llama_cpp.llama_chat_format import Qwen3VLChatHandler
 
+                    handler_cls = Qwen3VLChatHandler
+                except ImportError:
+                    try:
+                        from llama_cpp.llama_chat_format import Qwen25VLChatHandler
+
+                        handler_cls = Qwen25VLChatHandler
+                    except ImportError:
+                        raise RuntimeError(
+                            "[QwenVL] Missing Qwen VL chat handler in llama_cpp. Install the correct fork/wheel. See docs/GGUF_MANUAL_INSTALL.md"
+                        )
+
+            # Build handler kwargs per family. Gemma4ChatHandler validates kwargs in
+            # its parent __init__ at runtime (not via signature), so _filter_kwargs_for_callable
+            # cannot protect us — pass only keys we know each handler accepts.
             mmproj_kwargs = {
                 "clip_model_path": str(mmproj_path),
                 "image_max_tokens": img_max,
-                "force_reasoning": False,
                 "verbose": False,
             }
+            if not is_gemma:
+                mmproj_kwargs["force_reasoning"] = False
             mmproj_kwargs = _filter_kwargs_for_callable(getattr(handler_cls, "__init__", handler_cls), mmproj_kwargs)
             if "image_max_tokens" not in mmproj_kwargs:
                 print(
@@ -624,6 +648,7 @@ class QwenVLGGUFBase:
         except Exception:
             self.chat_handler = None
             raise
+        self._is_gemma = is_gemma
         self.current_signature = signature
 
     def _invoke(
@@ -654,6 +679,11 @@ class QwenVLGGUFBase:
                 {"role": "user", "content": user_prompt},
             ]
 
+        if self._is_gemma:
+            default_stop = ["<|turn>", "<|channel>", "<end_of_turn>", "<start_of_turn>"]
+        else:
+            default_stop = ["<|im_end|>", "<|im_start|>"]
+
         start = time.perf_counter()
         result = self.llm.create_chat_completion(
             messages=messages,
@@ -662,7 +692,7 @@ class QwenVLGGUFBase:
             top_p=float(top_p),
             repeat_penalty=float(repetition_penalty),
             seed=int(seed),
-            stop=["<|im_end|>", "<|im_start|>"] + (stop_words or []),
+            stop=default_stop + (stop_words or []),
         )
         elapsed = max(time.perf_counter() - start, 1e-6)
 
@@ -716,8 +746,11 @@ class QwenVLGGUFBase:
         if custom_prompt and custom_prompt.strip():
             prompt = custom_prompt.strip()
 
-        think_prefix = "/think" if enable_thinking else "/no_think"
-        prompt = f"{think_prefix}\n{prompt}"
+        is_gemma = _is_gemma_model_name(model_name)
+        if not is_gemma:
+            # Qwen uses inline /think /no_think tokens; Gemma 4 uses the handler's enable_thinking flag.
+            think_prefix = "/think" if enable_thinking else "/no_think"
+            prompt = f"{think_prefix}\n{prompt}"
 
         # Collect all PIL images first (static images + video frames)
         pil_images: list[Image.Image] = []
@@ -731,8 +764,9 @@ class QwenVLGGUFBase:
                 if pil is not None:
                     pil_images.append(pil)
 
-        # Auto-resize images to fit within ctx budget (prevent MROPE seq_add crash)
-        if pil_images and ctx is not None:
+        # Auto-resize images to fit within ctx budget (prevent MROPE seq_add crash on Qwen2VL).
+        # Gemma 4 does not use MROPE, so we skip this Qwen-specific guard.
+        if pil_images and ctx is not None and not is_gemma:
             text_token_overhead = 256  # system prompt + user prompt + formatting
             token_budget_for_images = max(ctx - max_tokens - text_token_overhead, 0)
             if token_budget_for_images == 0:
@@ -756,6 +790,7 @@ class QwenVLGGUFBase:
                 image_min_tokens=image_min_tokens,
                 top_k=top_k,
                 pool_size=pool_size,
+                enable_thinking=enable_thinking,
             )
             if images_b64 and self.chat_handler is None:
                 print("[QwenVL] Warning: images provided but this model entry has no mmproj_file; images will be ignored")
